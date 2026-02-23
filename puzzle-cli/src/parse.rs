@@ -60,22 +60,18 @@ fn parse_path_option(project_path: &str) {
 }
 
 static OPTION_ANSI_COLOR: &str = "ensi-color";
-static OPTION_STACK_TRACE: &str = "stack-trace";
 
 fn parse_features_options(value: &str) {
     parse_and_check_options(
         value,
         KEY_FEATURES,
-        [OPTION_ANSI_COLOR, OPTION_STACK_TRACE]
-            .into_iter()
-            .collect(),
+        [OPTION_ANSI_COLOR].into_iter().collect(),
         |env| {
             env.enable_ansi_color = true;
             env.enable_stack_trace = true;
         },
         |env, values| {
             env.enable_ansi_color = values.contains(OPTION_ANSI_COLOR);
-            env.enable_stack_trace = values.contains(OPTION_STACK_TRACE);
         },
     )
 }

@@ -1,4 +1,5 @@
 use indoc::indoc;
+use puzzle_core::error::cli_error;
 
 /// 查看帮助文档
 pub fn help() {
@@ -10,7 +11,6 @@ pub fn help() {
 
             --features=<option1,option2,...>            功能选项
                 ansi-color                              开启终端 Ansi 颜色
-                error-stack                             开启错误堆栈信息
                 all                                     开启以上功能
                 none                                    关闭以上功能          [默认]
 
@@ -40,10 +40,12 @@ pub fn help() {
 pub fn version() {
     let message = indoc! {
         "
-        Puzzle CLI 版本: 0.0.1
-        ----------------------
-        第三方库:
-            rust        1.93.1
+        ┌──────────────────────────────┐
+        │        Puzzle v0.0.1         │
+        │     Rust v1.93.1 Runtime     │
+        ├──────────────────────────────┤
+        │ • indoc               v2.0.7 │
+        └──────────────────────────────┘
         "
     };
     println!("{}", message);
@@ -51,5 +53,5 @@ pub fn version() {
 
 /// 未知命令
 pub fn unknown() {
-    println!("未知命令: 请使用 puzzle -h 或 puzzle --help 查看使用帮助手册")
+    cli_error("未知命令: 请使用 help 命令查看使用帮助手册")
 }

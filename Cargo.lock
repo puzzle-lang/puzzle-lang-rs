@@ -23,11 +23,15 @@ dependencies = [
 [[package]]
 name = "puzzle-core"
 version = "0.0.1"
+dependencies = [
+ "indoc",
+]
 
 [[package]]
 name = "puzzle-driver"
 version = "0.0.1"
 dependencies = [
+ "indoc",
  "puzzle-core",
 ]
 

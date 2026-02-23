@@ -16,11 +16,3 @@ impl ContextAttachment for FileContextAttachment {
         self
     }
 }
-
-// pub trait ContextAttachment {
-//     fn as_any(&self) -> &dyn Any;
-// }
-//
-// impl<T: 'static + ContextAttachment> ContextAttachment for T {
-//     fn as_any(&self) -> &dyn Any { self }
-// }
