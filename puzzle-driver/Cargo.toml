@@ -1,0 +1,7 @@
+[package]
+name = "puzzle-driver"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+puzzle-core.workspace = true

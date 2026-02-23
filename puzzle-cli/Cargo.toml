@@ -1,0 +1,10 @@
+[package]
+name = "puzzle-cli"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+puzzle-driver.workspace = true
+puzzle-core.workspace = true
+
+indoc.workspace = true

@@ -1,0 +1,11 @@
+{
+  "version": "0.1.2",
+  "name": "puzzle-example",
+  "modules": [
+    "parser-test"
+  ],
+  "entry": "parser-test",
+  "deps": [
+    "../puzzle-source"
+  ]
+}

@@ -1,0 +1,16 @@
+[workspace]
+members = [
+    "puzzle-cli",
+    "puzzle-core",
+    "puzzle-driver"
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.0.1"
+edition = "2024"
+
+[workspace.dependencies]
+puzzle-driver = { path = "./puzzle-driver" }
+puzzle-core = { path = "./puzzle-core" }
+indoc = { version = "2.0.7" }

@@ -1,0 +1,8 @@
+package puzzle.example.test
+
+object Test {
+
+    fun test() {
+
+    }
+}

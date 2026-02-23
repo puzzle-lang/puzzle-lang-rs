@@ -1,0 +1,52 @@
+package puzzle.example.ast
+
+fun lambdaTest() {
+    val lambda01: (() -> Unit)
+    val lambda02: ((x: Int) -> Int)
+    val lambda03: ((s: String) -> [Int, String])
+    val lambda04: ((a: Int, b: Int) -> Int)
+    val lambda05: ((name: String) -> [String, Boolean])
+    val lambda06: (((x: Int) -> Int))
+    val lambda07: (((s: String, flag: Boolean) -> [Int, String]))
+    val lambda08: ((x: Int, y: Int, z: Int) -> [Int, Int, Int])
+    val lambda09: (((lst: List<Int>) -> [Int, Int, Int]))
+    val lambda10: (((name: String, active: Boolean) -> [String, Int]))
+    val lambda11: ((() -> [Int, Int]))
+    val lambda12: (((x: Int) -> [Int, Int, Int]))
+    val lambda13: ((x: Int, y: Int) -> [String, Int, Boolean])
+    val lambda14: (((lst: List<String>, flag: Boolean) -> [List<Int>, String]))
+    val lambda15: ((() -> [Int, String, Boolean]))
+    val lambda16: (((a: Int, b: Int, c: Int) -> [Int, Int, Int]))
+    val lambda17: ((s1: String, s2: String, flag: Boolean) -> [String, Int, Boolean])
+    val lambda18: (((lst: List<Int>, s: String, b: Boolean) -> [List<Int>, Int, String]))
+    val lambda19: ((name: String) -> [Int, Boolean])
+    val lambda20: ((x: Int, f: ((y: Int) -> [Int, Int])) -> [Int, Int])
+}
+
+fun lambdaContextTest() {
+    val lambdaContext01: (context(Int) Int.() -> [Int, String])
+    val lambdaContext02: (context(String.() -> Unit, String) () -> Unit)
+    val lambdaContext03: context(Int)! ((Int)).() -> Unit
+}
+
+fun trailingClosureTest() {
+    callback1 {
+
+    }
+
+    callback2 { _: String, age: Int ->
+
+    }
+
+    callback3(name) {
+
+    }
+
+    callback4(name, age) {
+
+    }
+
+    callback5(name) { age, _ ->
+
+    }
+}

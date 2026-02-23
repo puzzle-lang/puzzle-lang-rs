@@ -1,0 +1,23 @@
+package puzzle.example.ast
+
+fun main() {
+
+	val str1 = "Hello World!"
+
+	val str2 = """
+	    {
+	        "code": 404,
+	        "msg": "Not Found"
+	    }
+	"""
+
+	val str3 = $"name: $name, age: ${age + 1}, height: 100"
+	val str4 = $"""  Hello  """
+	val str5 = $$"""
+	    {
+	        "code": $$code,
+	        "data": null,
+	        "msg": $${ $"Message content is: $msg" }
+        }
+	"""
+}
