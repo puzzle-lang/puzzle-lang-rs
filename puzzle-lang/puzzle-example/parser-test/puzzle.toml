@@ -1,0 +1,10 @@
+[module]
+version = "0.0.1"
+name = "puzzle-test"
+group = "puzzle.example"
+ignores = [
+    "src/main/puzzle/example/parser/**"
+]
+deps = [
+    "puzzle-core"
+]

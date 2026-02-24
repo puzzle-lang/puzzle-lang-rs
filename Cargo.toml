@@ -14,3 +14,7 @@ edition = "2024"
 puzzle-driver = { path = "./puzzle-driver" }
 puzzle-core = { path = "./puzzle-core" }
 indoc = { version = "2.0.7" }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = { version = "1.0.149" }
+toml = { version = "1.0.3+spec-1.1.0" }
+regex = { version = "1.12.3" }

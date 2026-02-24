@@ -1,0 +1,10 @@
+[project]
+version = "0.0.1"
+name = "puzzle-example"
+entry = "parser-test"
+
+[modules]
+parser-test = { path = "parser-test" }
+
+[deps]
+puzzle-core = { path = "../puzzle-source", module = "puzzle-core" }

@@ -1,9 +1,6 @@
-use std::any::Any;
+pub trait ContextAttachment {}
 
-pub trait ContextAttachment {
-    fn as_any(&self) -> &dyn Any;
-}
-
+#[derive(Default)]
 pub struct FileContextAttachment {
     pub builtin: bool,
     pub name: String,
@@ -11,8 +8,4 @@ pub struct FileContextAttachment {
     pub line_starts: Box<[i32]>,
 }
 
-impl ContextAttachment for FileContextAttachment {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-}
+impl ContextAttachment for FileContextAttachment {}

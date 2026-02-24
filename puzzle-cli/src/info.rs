@@ -1,4 +1,5 @@
 use indoc::indoc;
+use puzzle_core::cli_error;
 use puzzle_core::error::cli_error;
 
 /// 查看帮助文档
@@ -45,6 +46,7 @@ pub fn version() {
         │     Rust v1.93.1 Runtime     │
         ├──────────────────────────────┤
         │ • indoc               v2.0.7 │
+        │ • serde             v1.0.228 │
         └──────────────────────────────┘
         "
     };
@@ -53,5 +55,5 @@ pub fn version() {
 
 /// 未知命令
 pub fn unknown() {
-    cli_error("未知命令: 请使用 help 命令查看使用帮助手册")
+    cli_error!("未知命令: 请使用 help 命令查看使用帮助手册")
 }

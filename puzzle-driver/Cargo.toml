@@ -5,4 +5,5 @@ edition.workspace = true
 
 [dependencies]
 puzzle-core.workspace = true
-indoc.workspace = true
+toml.workspace = true
+regex.workspace = true

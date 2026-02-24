@@ -4,4 +4,4 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-indoc.workspace = true
+serde = { version = "1.0.228", features = ["derive"] }

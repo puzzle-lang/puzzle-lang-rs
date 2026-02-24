@@ -1,7 +1,38 @@
-use puzzle_core::environment::{read_env, write_env, Environment};
+use puzzle_core::cli_error;
 use puzzle_core::error::cli_error;
+use puzzle_core::options::CliOptions;
 use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
 use std::sync::{LazyLock, RwLockWriteGuard};
+
+pub fn parse_cli_args(args: &[String]) {
+    let mut used_arg_types = HashSet::new();
+    let arg_keys = AVAILABLE_ARG_PARSE_MAP
+        .keys()
+        .copied()
+        .collect::<HashSet<_>>();
+    args.into_iter().for_each(|arg| {
+        let option = arg_keys
+            .iter()
+            .find(|&&key| arg.starts_with(&format!("{}=", key)));
+        let key = option
+            .map(|&it| it)
+            .unwrap_or_else(|| cli_error!("未知选项: {}", arg));
+        if used_arg_types.contains(key) {
+            cli_error!("重复的选项: {}", key)
+        }
+        used_arg_types.insert(key);
+        let value = arg.strip_prefix(&format!("{}=", key)).unwrap();
+        if value.chars().any(|c| c.is_whitespace()) {
+            cli_error!("参数 {} 中不允许出现空白字符", arg)
+        }
+        if value.is_empty() {
+            cli_error!("参数 {}=<option1,option2,...> 缺少值", key)
+        }
+        AVAILABLE_ARG_PARSE_MAP[key](value.trim());
+    });
+    check_args();
+}
 
 static KEY_PATH: &str = "--path";
 static KEY_FEATURES: &str = "--features";
@@ -17,61 +48,30 @@ static AVAILABLE_ARG_PARSE_MAP: LazyLock<HashMap<&str, fn(&str)>> = LazyLock::ne
     ])
 });
 
-pub fn parse_cli_args(args: &[String]) {
-    let mut used_arg_types = HashSet::new();
-    let arg_keys = AVAILABLE_ARG_PARSE_MAP
-        .keys()
-        .copied()
-        .collect::<HashSet<_>>();
-    args.into_iter().for_each(|arg| {
-        let option = arg_keys
-            .iter()
-            .find(|&&key| arg.starts_with(&format!("{}=", key)));
-        let key = match option {
-            None => cli_error(&format!("未知选项: {}", arg)),
-            Some(&key) => key,
-        };
-        if used_arg_types.contains(key) {
-            cli_error(&format!("重复的选项: {}", key))
-        }
-        used_arg_types.insert(key);
-        let value = arg.strip_prefix(&format!("{}=", key)).unwrap();
-        if value.chars().any(|c| c.is_whitespace()) {
-            cli_error(&format!("参数 {} 中不允许出现空白字符", arg))
-        }
-        if value.is_empty() {
-            cli_error(&format!("参数 {}=<option1,option2,...> 缺少值", key))
-        }
-        AVAILABLE_ARG_PARSE_MAP[key](value.trim());
-    });
-    check_args();
-}
-
 fn check_args() {
-    let env = read_env();
-    if env.project_path.is_none() {
-        cli_error(&format!("缺少 {} 参数", KEY_PATH))
+    if !CliOptions::is_exists_project_path() {
+        cli_error!("缺少 {} 参数", KEY_PATH)
     }
 }
 
 fn parse_path_option(project_path: &str) {
-    let mut env = write_env();
-    env.project_path = project_path.to_string().into();
+    let mut options = CliOptions::write_cli_options();
+    let project_path = PathBuf::from(project_path);
+    if !(project_path.exists() && project_path.is_dir()) {
+        cli_error!("{:?} 项目不存在", project_path.file_name().unwrap());
+    }
+    options.project_path = project_path.canonicalize().unwrap().into();
 }
 
 static OPTION_ANSI_COLOR: &str = "ensi-color";
 
 fn parse_features_options(value: &str) {
-    parse_and_check_options(
+    with_bool_options(
         value,
         KEY_FEATURES,
-        [OPTION_ANSI_COLOR].into_iter().collect(),
-        |env| {
-            env.enable_ansi_color = true;
-            env.enable_stack_trace = true;
-        },
-        |env, values| {
-            env.enable_ansi_color = values.contains(OPTION_ANSI_COLOR);
+        &[OPTION_ANSI_COLOR],
+        |options, enables| {
+            options.enable_ansi_color = enables[0];
         },
     )
 }
@@ -79,17 +79,9 @@ fn parse_features_options(value: &str) {
 static OPTION_AST: &str = "ast";
 
 fn parse_exports_options(value: &str) {
-    parse_and_check_options(
-        value,
-        KEY_EXPORTS,
-        [OPTION_AST].into_iter().collect(),
-        |env| {
-            env.enable_export_ast = true;
-        },
-        |env, values| {
-            env.enable_export_ast = values.contains(OPTION_AST);
-        },
-    )
+    with_bool_options(value, KEY_EXPORTS, &[OPTION_AST], |options, enables| {
+        options.enable_export_ast = enables[0];
+    })
 }
 
 static OPTION_PROGRESS: &str = "progress";
@@ -97,49 +89,43 @@ static OPTION_IGNORE: &str = "ignore";
 static OPTION_FILE: &str = "file";
 
 fn parse_infos_options(value: &str) {
-    parse_and_check_options(
+    with_bool_options(
         value,
         KEY_INFOS,
-        [OPTION_PROGRESS, OPTION_IGNORE, OPTION_FILE]
-            .into_iter()
-            .collect(),
-        |env| {
-            env.enable_info_progress = true;
-            env.enable_info_ignore = true;
-            env.enable_info_file = true;
-        },
-        |env, values| {
-            env.enable_info_progress = values.contains(OPTION_PROGRESS);
-            env.enable_info_ignore = values.contains(OPTION_IGNORE);
-            env.enable_info_file = values.contains(OPTION_FILE);
+        &[OPTION_PROGRESS, OPTION_IGNORE, OPTION_FILE],
+        |options, enables| {
+            options.enable_info_progress = enables[0];
+            options.enable_info_ignore = enables[1];
+            options.enable_info_file = enables[2];
         },
     )
 }
 
-fn parse_and_check_options(
+fn with_bool_options(
     value: &str,
     key: &str,
-    available_options: HashSet<&str>,
-    on_all: fn(env: &mut RwLockWriteGuard<Environment>),
-    on_action: fn(env: &mut RwLockWriteGuard<Environment>, values: HashSet<&str>),
+    available_options: &[&str],
+    on_action: fn(options: &mut RwLockWriteGuard<CliOptions>, enables: Vec<bool>),
 ) {
-    let mut env = write_env();
+    let mut options = CliOptions::write_cli_options();
+    let len = available_options.len();
     match value {
-        "all" => return on_all(&mut env),
+        "all" => return on_action(&mut options, vec![true; len]),
         "none" => return,
         _ => {}
     }
-    let mut residues = available_options.clone();
-    let values = value.split(',').collect::<Vec<_>>();
-    values.iter().for_each(|v| {
-        if !available_options.contains(v) {
-            cli_error(&format!("{}={} 不可用的值", key, v))
+
+    let mut enables = vec![false; len];
+    value.split(',').enumerate().for_each(|(idx, v)| {
+        if !available_options.contains(&v) {
+            cli_error!("{}={} 不可用的值", key, v)
         }
-        if residues.contains(v) {
-            residues.remove(v);
+        if enables[idx] {
+            cli_error!("{}={} 重复的值", key, v)
         } else {
-            cli_error(&format!("{}={} 重复的值", key, v))
+            enables[idx] = true;
         }
     });
-    on_action(&mut env, values.into_iter().collect());
+
+    on_action(&mut options, enables);
 }

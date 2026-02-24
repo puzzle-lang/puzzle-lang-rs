@@ -1,0 +1,6 @@
+[project]
+version = "0.0.1"
+name = "puzzle-source"
+
+[modules]
+puzzle-core = { path = "puzzle-core" }
