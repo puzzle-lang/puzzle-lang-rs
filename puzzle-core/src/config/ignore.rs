@@ -1,3 +1,4 @@
+use crate::context::context::ModuleContext;
 use crate::context::context_attachment::ContextAttachment;
 use std::path::PathBuf;
 
@@ -5,7 +6,7 @@ pub struct IgnoreRuleAttachment {
     pub values: Vec<IgnoreRule>,
 }
 
-impl ContextAttachment for IgnoreRuleAttachment {}
+impl ContextAttachment<ModuleContext> for IgnoreRuleAttachment {}
 
 #[derive(Eq, PartialEq, Hash)]
 pub struct IgnoreRule {
