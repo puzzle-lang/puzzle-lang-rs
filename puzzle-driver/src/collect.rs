@@ -3,8 +3,10 @@ use crate::error::config_error;
 use puzzle_core::config::ignore::{IgnoreKind, IgnoreRule};
 use puzzle_core::config::toml::module::ModuleToml;
 use puzzle_core::config::toml::project::ProjectToml;
-use puzzle_core::context::context::{Context, FileContext, ModuleContext, ProjectContext};
-use puzzle_core::context::context_attachment::FileContextAttachment;
+use puzzle_core::context::attachment::FileContextAttachment;
+use puzzle_core::context::context::{
+    write_root_context, Context, FileContext, ModuleContext, ProjectContext,
+};
 use puzzle_core::extension::{OptionExt, PathBufExt};
 use regex::Regex;
 use std::collections::HashSet;
@@ -13,11 +15,12 @@ use std::path::PathBuf;
 use std::sync::LazyLock;
 use toml::from_str;
 
-pub struct SourcesResult {}
-
-pub fn collect_sources(project_path: &PathBuf) -> SourcesResult {
-    let projects = collect_projects(project_path.clone(), true);
-    config_error!(None, "{:?}", projects);
+pub fn collect_sources(project_path: &PathBuf) {
+    let projects = collect_all_projects(project_path.clone(), true);
+    let project_contexts = projects.iter().map(get_project_context).collect::<Vec<_>>();
+    let mut root = write_root_context();
+    root.children = project_contexts.some();
+    todo!()
 }
 
 #[derive(Debug)]
@@ -26,7 +29,7 @@ struct Project {
     toml: ProjectToml,
 }
 
-fn collect_projects(project_path: PathBuf, is_root_project: bool) -> Vec<Project> {
+fn collect_all_projects(project_path: PathBuf, is_root_project: bool) -> Vec<Project> {
     let mut projects = Vec::new();
     let toml_path = project_path.join("puzzle.toml");
     let name = project_path.file_name_string();
@@ -49,7 +52,7 @@ fn collect_projects(project_path: PathBuf, is_root_project: bool) -> Vec<Project
             if !dep_project_path.is_absolute() {
                 dep_project_path = dep_project_path.canonicalize().unwrap();
             }
-            let sub_projects = collect_projects(dep_project_path, false);
+            let sub_projects = collect_all_projects(dep_project_path, false);
             projects.extend(sub_projects);
         })
     }
@@ -87,7 +90,7 @@ fn get_project_toml(toml_path: &PathBuf, name: String, is_root_project: bool) ->
         Some(name) if !NAME_REGEX.is_match(&name) => {
             config_error!(
                 toml_path.some_ref(),
-                r#"{:?} 项目的 "puzzle.toml" 配置文件中, [project] 的 "name" 属性违反模式: "{}""#,
+                r#"{:?} 项目的 "puzzle.toml" 配置文件中, [project] 的 "name" 属性违反模式: {:?}"#,
                 name,
                 NAME_REGEX.as_str()
             )
@@ -103,7 +106,7 @@ fn get_project_toml(toml_path: &PathBuf, name: String, is_root_project: bool) ->
         Some(version) if !VERSION_REGEX.is_match(&version) => {
             config_error!(
                 toml_path.some_ref(),
-                r#"{:?} 项目的 "puzzle.toml" 配置文件中, [project] 的 "version" 属性违反模式: "{}""#,
+                r#"{:?} 项目的 "puzzle.toml" 配置文件中, [project] 的 "version" 属性违反模式: {:?}"#,
                 name,
                 VERSION_REGEX.as_str()
             )
@@ -137,6 +140,10 @@ fn get_project_toml(toml_path: &PathBuf, name: String, is_root_project: bool) ->
         _ => {}
     };
     toml
+}
+
+fn get_project_context(project: &Project) -> ProjectContext {
+    todo!()
 }
 
 fn get_module_context(parent: ProjectContext, path: PathBuf, config: ModuleToml) -> ModuleContext {

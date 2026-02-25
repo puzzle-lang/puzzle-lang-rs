@@ -1,5 +1,5 @@
 use crate::context::context::ModuleContext;
-use crate::context::context_attachment::ContextAttachment;
+use crate::context::attachment::ContextAttachment;
 
 pub struct DependenceAttachment {
     pub values: Vec<Dependence>,

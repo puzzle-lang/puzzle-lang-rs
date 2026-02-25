@@ -1,7 +1,7 @@
 use crate::context::context::{Context, FileContext};
 use std::path::PathBuf;
 
-pub trait ContextAttachment<C: Context + ?Sized> {}
+pub trait ContextAttachment<C: Context + ?Sized> : Send + Sync {}
 
 #[derive(Default)]
 pub struct FileContextAttachment {

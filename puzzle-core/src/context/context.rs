@@ -1,6 +1,7 @@
-use crate::context::context_attachment::ContextAttachment;
+use crate::context::attachment::ContextAttachment;
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
+use std::sync::{LazyLock, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 pub type ContextAttachmentMap<C: Context> = HashMap<TypeId, Box<dyn ContextAttachment<C>>>;
 
@@ -24,18 +25,21 @@ where
     }
 }
 
-pub struct RootContext {
-    pub attachments: ContextAttachmentMap<Self>,
-    pub children: Vec<ProjectContext>,
+static ROOT_CONTEXT: LazyLock<RwLock<RootContext>> =
+    LazyLock::new(|| RwLock::new(RootContext::default()));
+
+pub fn read_root_context() -> RwLockReadGuard<'static, RootContext> {
+    ROOT_CONTEXT.read().unwrap()
 }
 
-impl RootContext {
-    pub fn new() -> Self {
-        Self {
-            attachments: ContextAttachmentMap::default(),
-            children: Vec::default(),
-        }
-    }
+pub fn write_root_context() -> RwLockWriteGuard<'static, RootContext> {
+    ROOT_CONTEXT.write().unwrap()
+}
+
+#[derive(Default)]
+pub struct RootContext {
+    pub attachments: ContextAttachmentMap<Self>,
+    pub children: Option<Vec<ProjectContext>>,
 }
 
 impl Context for RootContext {
@@ -50,15 +54,15 @@ impl Context for RootContext {
 pub struct ProjectContext {
     pub parent: RootContext,
     pub attachments: ContextAttachmentMap<Self>,
-    pub children: Vec<ProjectContext>,
+    pub children: Option<Vec<ProjectContext>>,
 }
 
 impl ProjectContext {
     pub fn new(parent: RootContext) -> Self {
         Self {
             parent,
-            attachments: ContextAttachmentMap::default(),
-            children: Vec::default(),
+            attachments: ContextAttachmentMap::new(),
+            children: None,
         }
     }
 }
@@ -75,15 +79,15 @@ impl Context for ProjectContext {
 pub struct ModuleContext {
     pub parent: ProjectContext,
     pub attachments: ContextAttachmentMap<Self>,
-    pub children: Vec<FileContext>,
+    pub children: Option<Vec<FileContext>>,
 }
 
 impl ModuleContext {
     pub fn new(parent: ProjectContext) -> Self {
         Self {
             parent,
-            attachments: ContextAttachmentMap::default(),
-            children: Vec::default(),
+            attachments: ContextAttachmentMap::new(),
+            children: None,
         }
     }
 }
@@ -107,7 +111,7 @@ impl FileContext {
     pub fn new(parent: ModuleContext) -> Self {
         Self {
             parent,
-            attachments: ContextAttachmentMap::default(),
+            attachments: ContextAttachmentMap::new(),
         }
     }
 }
