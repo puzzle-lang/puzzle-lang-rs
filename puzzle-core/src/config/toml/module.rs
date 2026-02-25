@@ -2,7 +2,7 @@ use serde::Deserialize;
 
 #[derive(Deserialize)]
 pub struct ModuleToml {
-    pub module: Module,
+    pub module: Option<Module>,
 }
 
 #[derive(Deserialize)]

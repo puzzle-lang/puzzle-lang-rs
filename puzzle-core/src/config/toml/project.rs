@@ -3,9 +3,9 @@ use std::collections::HashMap;
 
 #[derive(Deserialize, Debug)]
 pub struct ProjectToml {
-    pub project: Project,
-    pub modules: HashMap<String, Module>,
-    pub deps: HashMap<String, Dep>,
+    pub project: Option<Project>,
+    pub modules: Option<HashMap<String, Module>>,
+    pub deps: Option<HashMap<String, Dep>>,
 }
 
 #[derive(Deserialize, Debug)]

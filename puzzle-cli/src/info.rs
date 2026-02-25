@@ -1,6 +1,6 @@
+use crate::cli_error;
+use crate::error::cli_error;
 use indoc::indoc;
-use puzzle_core::cli_error;
-use puzzle_core::error::cli_error;
 
 /// 查看帮助文档
 pub fn help() {

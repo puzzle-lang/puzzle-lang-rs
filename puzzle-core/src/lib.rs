@@ -1,5 +1,8 @@
+pub mod ansi;
+pub mod config;
 pub mod context;
 pub mod error;
+pub mod location;
 pub mod options;
 pub mod time;
-pub mod config;
+pub mod extension;

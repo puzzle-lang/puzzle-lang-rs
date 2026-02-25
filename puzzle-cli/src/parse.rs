@@ -1,5 +1,5 @@
-use puzzle_core::cli_error;
-use puzzle_core::error::cli_error;
+use crate::cli_error;
+use crate::error::cli_error;
 use puzzle_core::options::CliOptions;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -56,11 +56,14 @@ fn check_args() {
 
 fn parse_path_option(project_path: &str) {
     let mut options = CliOptions::write_cli_options();
-    let project_path = PathBuf::from(project_path);
+    let mut project_path = PathBuf::from(project_path);
     if !(project_path.exists() && project_path.is_dir()) {
         cli_error!("{:?} 项目不存在", project_path.file_name().unwrap());
     }
-    options.project_path = project_path.canonicalize().unwrap().into();
+    if !project_path.is_absolute() {
+        project_path = project_path.canonicalize().unwrap();
+    }
+    options.project_path = project_path.into();
 }
 
 static OPTION_ANSI_COLOR: &str = "ensi-color";

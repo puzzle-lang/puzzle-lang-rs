@@ -1,5 +1,6 @@
 mod info;
 mod parse;
+mod error;
 
 use crate::info::{help, unknown, version};
 use crate::parse::parse_cli_args;
