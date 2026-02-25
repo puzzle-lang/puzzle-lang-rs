@@ -12,10 +12,7 @@ where
 
     fn attachments_mut(&mut self) -> &mut ContextAttachmentMap<Self>;
 
-    fn insert<CA: ContextAttachment<Self> + 'static>(&mut self, value: CA)
-    where
-        Self: Sized,
-    {
+    fn insert<CA: ContextAttachment<Self> + 'static>(&mut self, value: CA) {
         let id = TypeId::of::<CA>();
         self.attachments_mut().insert(id, Box::new(value));
     }
