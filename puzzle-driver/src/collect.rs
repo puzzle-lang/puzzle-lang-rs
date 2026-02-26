@@ -3,9 +3,7 @@ use crate::error::config_error;
 use puzzle_core::config::ignore::{IgnoreKind, IgnoreRule, IgnoreRulesAttachment};
 use puzzle_core::config::toml::module::ModuleToml;
 use puzzle_core::config::toml::project::{Module, ProjectToml};
-use puzzle_core::context::attachment::{
-    FileAttachment, ModuleAttachment, ProjectAttachment,
-};
+use puzzle_core::context::attachment::{FileAttachment, ModuleAttachment, ProjectAttachment};
 use puzzle_core::context::context::{
     context_ref, write_root_context, Context, ContextRef, FileContext, ModuleContext, ProjectContext,
     ROOT_CONTEXT,
@@ -142,7 +140,7 @@ fn get_module_context(
     let module = toml.module.unwrap();
     let ignore_rules = module
         .ignores
-        .map(|ignores| to_ignore_rules(module_path, toml_path, module_name, ignores))
+        .map(|ignores| to_ignore_rules(&source_path, toml_path, module_name, ignores))
         .unwrap_or_default();
 
     let context = context_ref(ModuleContext::new(Arc::downgrade(parent)));
@@ -181,7 +179,7 @@ static IGNORE_REGEX: LazyLock<Regex> = LazyLock::new(|| {
 });
 
 fn to_ignore_rules(
-    module_path: &PathBuf,
+    source_path: &PathBuf,
     toml_path: &PathBuf,
     module_name: &String,
     ignores: Vec<String>,
@@ -201,23 +199,23 @@ fn to_ignore_rules(
             }
             match ignore.as_str() {
                 "**" => IgnoreRule {
-                    path: module_path.clone(),
+                    path: source_path.clone(),
                     kind: IgnoreKind::Recursive,
                 },
                 "*" => IgnoreRule {
-                    path: module_path.clone(),
+                    path: source_path.clone(),
                     kind: IgnoreKind::Children,
                 },
                 _ if ignore.ends_with("/**") => IgnoreRule {
-                    path: module_path.join(ignore.strip_suffix("/**").unwrap()),
+                    path: source_path.join(ignore.strip_suffix("/**").unwrap()),
                     kind: IgnoreKind::Recursive,
                 },
                 _ if ignore.ends_with("/*") => IgnoreRule {
-                    path: module_path.join(ignore.strip_suffix("/*").unwrap()),
+                    path: source_path.join(ignore.strip_suffix("/*").unwrap()),
                     kind: IgnoreKind::Children,
                 },
                 _ => IgnoreRule {
-                    path: module_path.join(&ignore),
+                    path: source_path.join(&ignore),
                     kind: IgnoreKind::File,
                 }
             }
@@ -410,7 +408,7 @@ fn collect_all_source_paths(path: PathBuf, attachment: &IgnoreRulesAttachment) -
         if attachment.file_paths.contains(&path) {
             Vec::new()
         } else {
-            vec![path.clone()]
+            vec![path]
         }
     } else if path.is_dir() {
         let Some(IgnoreRule { kind, .. }) = attachment.dir_rules.iter().find(|it| it.path == path)
