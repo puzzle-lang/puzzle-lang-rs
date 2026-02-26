@@ -119,14 +119,14 @@ fn with_bool_options(
     }
 
     let mut enables = vec![false; len];
-    value.split(',').enumerate().for_each(|(idx, v)| {
+    value.split(',').enumerate().for_each(|(index, v)| {
         if !available_options.contains(&v) {
             cli_error!("{}={} 不可用的值", key, v)
         }
-        if enables[idx] {
+        if enables[index] {
             cli_error!("{}={} 重复的值", key, v)
         } else {
-            enables[idx] = true;
+            enables[index] = true;
         }
     });
 

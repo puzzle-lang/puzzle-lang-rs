@@ -11,10 +11,12 @@ pub trait OptionExt {
 }
 
 impl<T> OptionExt for T {
+    #[inline(always)]
     fn some(self) -> Option<Self> {
         Some(self)
     }
 
+    #[inline(always)]
     fn some_ref(&self) -> Option<&Self> {
         Some(self)
     }
@@ -22,10 +24,30 @@ impl<T> OptionExt for T {
 
 pub trait PathBufExt {
     fn file_name_string(&self) -> String;
+
+    fn canonicalize_string(&self) -> String;
 }
 
 impl PathBufExt for PathBuf {
     fn file_name_string(&self) -> String {
         self.file_name().unwrap().to_string_lossy().into_owned()
+    }
+
+    fn canonicalize_string(&self) -> String {
+        if self.is_absolute() {
+            self.to_string_lossy().into_owned()
+        } else {
+            self.canonicalize().unwrap().to_string_lossy().into_owned()
+        }
+    }
+}
+
+pub trait StringExt {
+    fn split_to_vec(&self, pat: &str) -> Vec<String>;
+}
+
+impl StringExt for String {
+    fn split_to_vec(&self, pat: &str) -> Vec<String> {
+        self.split(pat).map(String::from).collect()
     }
 }

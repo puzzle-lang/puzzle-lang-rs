@@ -1,11 +1,13 @@
-use crate::context::context::ModuleContext;
 use crate::context::attachment::ContextAttachment;
+use crate::context::context::ModuleContext;
+use crate::impl_context_attachment;
+use std::any::Any;
 
 pub struct DependenceAttachment {
-    pub values: Vec<Dependence>,
+    pub deps: Vec<Dependence>,
 }
 
-impl ContextAttachment<ModuleContext> for DependenceAttachment {}
+impl_context_attachment!(DependenceAttachment, ModuleContext);
 
 pub struct Dependence {
     project_name: String,

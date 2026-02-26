@@ -1,4 +1,5 @@
 use puzzle_core::error::pzl_error_impl;
+use puzzle_core::extension::OptionExt;
 use std::path::PathBuf;
 
 #[macro_export]
@@ -9,6 +10,6 @@ macro_rules! config_error {
 }
 
 #[inline]
-pub fn config_error(path: Option<&PathBuf>, msg: &str) -> ! {
-    pzl_error_impl("配置", path, None, msg)
+pub fn config_error(path: &PathBuf, msg: &str) -> ! {
+    pzl_error_impl("配置", path.some(), None, msg)
 }

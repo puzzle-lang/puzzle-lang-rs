@@ -1,23 +1,26 @@
-use crate::context::context::ModuleContext;
 use crate::context::attachment::ContextAttachment;
+use crate::context::context::ModuleContext;
+use crate::impl_context_attachment;
+use std::any::Any;
+use std::collections::HashSet;
 use std::path::PathBuf;
 
-pub struct IgnoreRuleAttachment {
-    pub values: Vec<IgnoreRule>,
+pub struct IgnoreRulesAttachment {
+    pub file_paths: HashSet<PathBuf>,
+    pub dir_rules: Vec<IgnoreRule>,
 }
 
-impl ContextAttachment<ModuleContext> for IgnoreRuleAttachment {}
+impl_context_attachment!(IgnoreRulesAttachment, ModuleContext);
 
 #[derive(Eq, PartialEq, Hash)]
 pub struct IgnoreRule {
     pub path: PathBuf,
     pub kind: IgnoreKind,
-    pub raw: String,
 }
 
 #[derive(Eq, PartialEq, Hash)]
 pub enum IgnoreKind {
-    EXACT,
-    CHILDREN,
-    RECURSIVE,
+    File,
+    Children,
+    Recursive,
 }

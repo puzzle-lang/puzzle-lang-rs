@@ -1,11 +1,11 @@
 use serde::Deserialize;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 pub struct ModuleToml {
     pub module: Option<Module>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 pub struct Module {
     pub version: Option<String>,
     pub name: Option<String>,
