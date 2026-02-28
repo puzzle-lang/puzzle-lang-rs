@@ -1,7 +1,5 @@
-use crate::context::attachment::ContextAttachment;
-use crate::context::context::ModuleContext;
+use crate::context::module::ModuleContext;
 use crate::impl_context_attachment;
-use std::any::Any;
 use std::collections::HashSet;
 use std::path::PathBuf;
 

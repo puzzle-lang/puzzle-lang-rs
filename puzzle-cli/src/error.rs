@@ -3,6 +3,8 @@ use puzzle_core::error::pzl_error_impl;
 #[macro_export]
 macro_rules! cli_error {
     ($($arg:tt)+) => {{
+        use crate::error::cli_error;
+        
         cli_error(&format!($($arg)+))
     }};
 }

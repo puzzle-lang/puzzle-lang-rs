@@ -1,9 +1,15 @@
-use crate::context::attachment::ContextAttachment;
-use std::any::TypeId;
+use std::any::{Any, TypeId};
 use std::collections::HashMap;
-use std::sync::{Arc, LazyLock, RwLock, RwLockReadGuard, RwLockWriteGuard, Weak};
+use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard, Weak};
 
-pub type ContextAttachmentMap<C: Context> = HashMap<TypeId, Box<dyn ContextAttachment<C>>>;
+pub type ContextAttachmentMap<C> = HashMap<TypeId, Box<dyn ContextAttachment<C>>>;
+
+pub type ContextRef<T> = Arc<RwLock<T>>;
+pub type ContextWeak<T> = Weak<RwLock<T>>;
+
+pub fn context_ref<C: Context>(context: C) -> ContextRef<C> {
+    Arc::new(RwLock::new(context))
+}
 
 pub trait Context
 where
@@ -25,109 +31,47 @@ where
     }
 }
 
-pub static ROOT_CONTEXT: LazyLock<Arc<RwLock<RootContext>>> =
-    LazyLock::new(|| Arc::new(RwLock::new(RootContext::default())));
-
-pub fn read_root_context() -> RwLockReadGuard<'static, RootContext> {
-    ROOT_CONTEXT.read().unwrap()
+pub trait ContextAttachment<C: Context + ?Sized>: Any + Send + Sync {
+    fn as_any(&self) -> &dyn Any;
 }
 
-pub fn write_root_context() -> RwLockWriteGuard<'static, RootContext> {
-    ROOT_CONTEXT.write().unwrap()
-}
+#[macro_export]
+macro_rules! impl_context_attachment {
+    ($ca:ty, $c:ty) => {
+        use crate::context::context::ContextAttachment;
+        use std::any::Any;
 
-pub type ContextRef<T> = Arc<RwLock<T>>;
-pub type ContextWeak<T> = Weak<RwLock<T>>;
-
-#[derive(Default)]
-pub struct RootContext {
-    pub attachments: ContextAttachmentMap<Self>,
-    pub children: Option<Vec<ContextRef<ProjectContext>>>,
-}
-
-impl Context for RootContext {
-    fn attachments(&self) -> &ContextAttachmentMap<Self> {
-        &self.attachments
-    }
-    fn attachments_mut(&mut self) -> &mut ContextAttachmentMap<Self> {
-        &mut self.attachments
-    }
-}
-
-pub struct ProjectContext {
-    pub parent: ContextWeak<RootContext>,
-    pub attachments: ContextAttachmentMap<Self>,
-    pub children: Option<Vec<ContextRef<ModuleContext>>>,
-}
-
-impl ProjectContext {
-    pub fn new(parent: ContextWeak<RootContext>) -> Self {
-        ProjectContext {
-            parent,
-            attachments: HashMap::default(),
-            children: Option::default(),
+        impl ContextAttachment<$c> for $ca {
+            fn as_any(&self) -> &dyn Any {
+                self
+            }
         }
+    };
+}
+pub trait HasChildren {
+    type Child: Context;
+
+    fn set_children(&mut self, children: Vec<ContextRef<Self::Child>>);
+
+    fn get_children(&self) -> &Vec<ContextRef<Self::Child>>;
+
+    fn read_children(&self) -> Vec<RwLockReadGuard<'_, Self::Child>> {
+        self.get_children()
+            .iter()
+            .map(|c| c.read().unwrap())
+            .collect()
+    }
+
+    fn write_children(&self) -> Vec<RwLockWriteGuard<'_, Self::Child>> {
+        self.get_children()
+            .iter()
+            .map(|c| c.write().unwrap())
+            .collect()
     }
 }
 
-impl Context for ProjectContext {
-    fn attachments(&self) -> &ContextAttachmentMap<Self> {
-        &self.attachments
-    }
-    fn attachments_mut(&mut self) -> &mut ContextAttachmentMap<Self> {
-        &mut self.attachments
-    }
-}
+pub trait HasParent {
+    type Parent: Context;
 
-pub struct ModuleContext {
-    pub parent: ContextWeak<ProjectContext>,
-    pub attachments: ContextAttachmentMap<Self>,
-    pub children: Option<Vec<ContextRef<FileContext>>>,
-}
-
-impl ModuleContext {
-    pub fn new(parent: ContextWeak<ProjectContext>) -> Self {
-        ModuleContext {
-            parent,
-            attachments: HashMap::default(),
-            children: Option::default(),
-        }
-    }
-}
-
-impl Context for ModuleContext {
-    fn attachments(&self) -> &ContextAttachmentMap<Self> {
-        &self.attachments
-    }
-
-    fn attachments_mut(&mut self) -> &mut ContextAttachmentMap<Self> {
-        &mut self.attachments
-    }
-}
-
-pub struct FileContext {
-    pub parent: ContextWeak<ModuleContext>,
-    pub attachments: ContextAttachmentMap<Self>,
-}
-
-impl FileContext {
-    pub fn new(parent: ContextWeak<ModuleContext>) -> Self {
-        FileContext {
-            parent,
-            attachments: HashMap::default(),
-        }
-    }
-}
-
-impl Context for FileContext {
-    fn attachments(&self) -> &ContextAttachmentMap<Self> {
-        &self.attachments
-    }
-    fn attachments_mut(&mut self) -> &mut ContextAttachmentMap<Self> {
-        &mut self.attachments
-    }
-}
-
-pub fn context_ref<C: Context>(context: C) -> ContextRef<C> {
-    Arc::new(RwLock::new(context))
+    fn parent(&self) -> Arc<RwLock<Self::Parent>>;
 }

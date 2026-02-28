@@ -1,14 +1,15 @@
 use crate::config_error;
-use crate::error::config_error;
 use puzzle_core::config::ignore::{IgnoreKind, IgnoreRule, IgnoreRulesAttachment};
 use puzzle_core::config::toml::module::ModuleToml;
 use puzzle_core::config::toml::project::{Module, ProjectToml};
-use puzzle_core::context::attachment::{FileAttachment, ModuleAttachment, ProjectAttachment};
-use puzzle_core::context::context::{
-    context_ref, write_root_context, Context, ContextRef, FileContext, ModuleContext, ProjectContext,
-    ROOT_CONTEXT,
+use puzzle_core::context::context::{context_ref, Context, ContextRef, HasChildren};
+use puzzle_core::context::file::{FileAttachment, FileContext};
+use puzzle_core::context::module::{ModuleAttachment, ModuleContext};
+use puzzle_core::context::project::{ProjectAttachment, ProjectContext};
+use puzzle_core::context::root::{
+    read_root_context, weak_root_context, write_root_context, RootAttachment,
 };
-use puzzle_core::extension::{OptionExt, PathBufExt, StringExt};
+use puzzle_core::extension::{PathBufExt, StringExt};
 use regex::Regex;
 use std::collections::HashSet;
 use std::fs::{read_dir, read_to_string};
@@ -19,9 +20,12 @@ use toml::from_str;
 pub fn collect_sources(project_path: &PathBuf) {
     let projects = collect_all_projects(project_path.clone(), true);
     let project_contexts = projects.iter().map(get_project_context).collect::<Vec<_>>();
-    let mut root = write_root_context();
-    root.children = project_contexts.some();
-    todo!()
+    let mut guard = write_root_context();
+    guard.set_children(project_contexts);
+
+    let max_path_length = calc_max_path_length();
+    println!("{}", max_path_length);
+    guard.set(RootAttachment { max_path_length });
 }
 
 #[derive(Debug)]
@@ -68,8 +72,7 @@ fn collect_all_projects(project_path: PathBuf, is_root_project: bool) -> Vec<Pro
 }
 
 fn get_project_context(project: &ProjectTemp) -> ContextRef<ProjectContext> {
-    let parent = Arc::downgrade(&ROOT_CONTEXT.clone());
-    let context = context_ref(ProjectContext::new(parent));
+    let context = context_ref(ProjectContext::new(weak_root_context()));
     let project_toml = &project.toml;
     let project_name = project_toml
         .project
@@ -78,6 +81,7 @@ fn get_project_context(project: &ProjectTemp) -> ContextRef<ProjectContext> {
         .unwrap();
 
     let mut guard = context.write().unwrap();
+
     guard.set(ProjectAttachment {
         name: project_name.clone(),
         path: project.path.clone(),
@@ -95,8 +99,7 @@ fn get_project_context(project: &ProjectTemp) -> ContextRef<ProjectContext> {
             get_module_context(&context, &module_path, &toml_path, module_toml, name)
         })
         .collect::<Vec<_>>();
-
-    guard.children = modules.some();
+    guard.set_children(modules);
 
     drop(guard);
     context
@@ -167,7 +170,8 @@ fn get_module_context(
     });
 
     let paths = collect_all_source_paths(source_path, guard.get());
-    paths.iter().for_each(|path| println!("{:?}", path));
+
+    // guard.set_children(paths);
 
     drop(guard);
 
@@ -433,4 +437,20 @@ fn collect_all_source_paths(path: PathBuf, attachment: &IgnoreRulesAttachment) -
     } else {
         Vec::new()
     }
+}
+
+fn calc_max_path_length() -> usize {
+    let mut max_path_length = 0;
+    for project in read_root_context().read_children() {
+        for module in project.read_children() {
+            for file in module.read_children() {
+                let attachment = file.get::<FileAttachment>();
+                let length = attachment.path.canonicalize_string().len();
+                if length > max_path_length {
+                    max_path_length = length;
+                }
+            }
+        }
+    }
+    max_path_length
 }

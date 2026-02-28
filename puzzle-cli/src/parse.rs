@@ -1,5 +1,4 @@
 use crate::cli_error;
-use crate::error::cli_error;
 use puzzle_core::options::CliOptions;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;

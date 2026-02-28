@@ -5,6 +5,8 @@ use std::path::PathBuf;
 #[macro_export]
 macro_rules! config_error {
     ($path: expr, $($arg:tt)+) => {{
+        use crate::error::config_error;
+        
         config_error($path, &format!($($arg)+))
     }};
 }

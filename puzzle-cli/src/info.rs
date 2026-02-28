@@ -1,5 +1,4 @@
 use crate::cli_error;
-use crate::error::cli_error;
 use indoc::indoc;
 
 /// 查看帮助文档
