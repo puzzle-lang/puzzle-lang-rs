@@ -34,11 +34,7 @@ impl PathBufExt for PathBuf {
     }
 
     fn canonicalize_string(&self) -> String {
-        if self.is_absolute() {
-            self.to_string_lossy().into_owned()
-        } else {
-            self.canonicalize().unwrap().to_string_lossy().into_owned()
-        }
+        self.canonicalize().unwrap().to_string_lossy().into_owned()
     }
 }
 

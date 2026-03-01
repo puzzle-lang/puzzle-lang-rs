@@ -1,6 +1,6 @@
 use crate::collect::collect_sources;
 use puzzle_core::options::CliOptions;
-use puzzle_core::time::{measure_time, measure_timed_value};
+use puzzle_core::time::measure_time;
 
 pub fn start_building() {
     let duration = measure_time(compile_frontend);
@@ -11,8 +11,5 @@ pub fn start_building() {
 
 fn compile_frontend() {
     let project_path = CliOptions::project_path();
-    let sources_value = measure_timed_value(|| collect_sources(&project_path));
-    if CliOptions::enable_info_progress() {
-        println!("项目源收集用时: {:?}", sources_value.duration)
-    }
+    collect_sources(&project_path);
 }

@@ -11,26 +11,38 @@ use puzzle_core::context::module::{ModuleAttachment, ModuleContext};
 use puzzle_core::context::project::{ProjectAttachment, ProjectContext};
 use puzzle_core::context::root::{weak_root_context, write_root_context, RootAttachment};
 use puzzle_core::extension::{PathBufExt, StringExt};
+use puzzle_core::io::{create_file, remove_files};
 use puzzle_core::options::CliOptions;
+use puzzle_core::time::measure_time;
 use regex::Regex;
 use std::collections::HashSet;
-use std::fs::{read_dir, read_to_string};
+use std::fs::{create_dir_all, metadata, read, read_dir, read_to_string, write};
 use std::path::PathBuf;
 use std::sync::{Arc, LazyLock};
+use std::time::UNIX_EPOCH;
 use toml::from_str;
 
 pub fn collect_sources(project_path: &PathBuf) {
-    let projects = collect_all_projects(project_path.clone(), true);
-    let project_contexts = projects.iter().map(get_project_context).collect::<Vec<_>>();
-    let max_path_length = calc_max_path_length(&project_contexts);
+    let duration = measure_time(|| {
+        let build_dir = project_path.join("build");
+        let projects = collect_all_projects(project_path.clone(), &build_dir, true);
+        let project_contexts = projects
+            .iter()
+            .map(|p| get_project_context(p, &build_dir))
+            .collect::<Vec<_>>();
+        let max_path_length = calc_max_path_length(&project_contexts);
 
-    if CliOptions::enable_info_ignore() {
-        print_ignore_rules(&project_contexts)
+        if CliOptions::enable_info_ignore() {
+            print_ignore_rules(&project_contexts)
+        }
+
+        let mut guard = write_root_context();
+        guard.set_children(project_contexts);
+        guard.set(RootAttachment { max_path_length });
+    });
+    if CliOptions::enable_info_progress() {
+        println!("项目源收集用时: {:?}", duration);
     }
-
-    let mut guard = write_root_context();
-    guard.set_children(project_contexts);
-    guard.set(RootAttachment { max_path_length });
 }
 
 #[derive(Debug)]
@@ -40,11 +52,21 @@ struct ProjectTemp {
     toml_path: PathBuf,
 }
 
-fn collect_all_projects(project_path: PathBuf, is_root_project: bool) -> Vec<ProjectTemp> {
+fn collect_all_projects(
+    project_path: PathBuf,
+    build_dir: &PathBuf,
+    is_root_project: bool,
+) -> Vec<ProjectTemp> {
     let mut projects = Vec::new();
-    let name = project_path.file_name_string();
+    let project_name = project_path.file_name_string();
     let toml_path = project_path.join("puzzle.toml");
-    let project_toml = get_project_toml(&project_path, &toml_path, name, is_root_project);
+    let project_toml = get_project_toml(
+        &project_path,
+        build_dir,
+        &toml_path,
+        project_name,
+        is_root_project,
+    );
     let deps = project_toml.deps.as_ref();
     if deps.is_some() {
         deps.unwrap().iter().for_each(|(name, dep)| {
@@ -63,7 +85,7 @@ fn collect_all_projects(project_path: PathBuf, is_root_project: bool) -> Vec<Pro
             if !dep_project_path.is_absolute() {
                 dep_project_path = dep_project_path.canonicalize().unwrap();
             }
-            let sub_projects = collect_all_projects(dep_project_path, false);
+            let sub_projects = collect_all_projects(dep_project_path, build_dir, false);
             projects.extend(sub_projects);
         })
     }
@@ -76,7 +98,7 @@ fn collect_all_projects(project_path: PathBuf, is_root_project: bool) -> Vec<Pro
     projects
 }
 
-fn get_project_context(project: &ProjectTemp) -> ContextRef<ProjectContext> {
+fn get_project_context(project: &ProjectTemp, build_dir: &PathBuf) -> ContextRef<ProjectContext> {
     let context = context_ref(ProjectContext::new(weak_root_context()));
     let project_toml = &project.toml;
     let project_name = project_toml
@@ -100,7 +122,14 @@ fn get_project_context(project: &ProjectTemp) -> ContextRef<ProjectContext> {
         .map(|(name, module)| {
             let module_path = resolve_module_path(project, module, project_name, name);
             let toml_path = module_path.join("puzzle.toml");
-            let module_toml = get_module_toml(&module_path, &toml_path, name, project_toml);
+            let module_toml = get_module_toml(
+                &module_path,
+                &toml_path,
+                build_dir,
+                project_name,
+                name,
+                project_toml,
+            );
             get_module_context(&context, &module_path, &toml_path, module_toml, name)
         })
         .collect::<Vec<_>>();
@@ -266,6 +295,7 @@ static GROUP_REGEX: LazyLock<Regex> =
 
 fn get_project_toml(
     project_path: &PathBuf,
+    build_path: &PathBuf,
     toml_path: &PathBuf,
     project_name: String,
     is_root_project: bool,
@@ -273,6 +303,30 @@ fn get_project_toml(
     if !(toml_path.exists() && toml_path.is_file()) {
         config_error!(project_path, "puzzle.toml 项目配置文件缺失");
     }
+    let modified_time = get_modified_time_string(toml_path);
+    let modified_dir = build_path.join("modified/toml");
+    if !modified_dir.exists() {
+        create_dir_all(&modified_dir).unwrap();
+    }
+    let modified_file = modified_dir.join(format!("project:{}:{}", project_name, modified_time));
+    let bin_dir = build_path.join("bin/toml");
+    if !bin_dir.exists() {
+        create_dir_all(&bin_dir).unwrap();
+    }
+    let bin_file = bin_dir.join(format!("project:{}.bin", project_name));
+    if modified_file.exists() && bin_file.exists() {
+        println!("cache: {}", toml_path.canonicalize_string());
+        let bytes = read(&bin_file).unwrap();
+        return postcard::from_bytes(&bytes).unwrap();
+    }
+
+    remove_files(&modified_dir, |path| {
+        path.file_name_string().starts_with(&project_name)
+    })
+    .unwrap();
+
+    create_file(&modified_file).expect("无法创建");
+
     let content = read_to_string(&toml_path).unwrap();
     let toml = from_str::<ProjectToml>(&content).unwrap();
     let Some(ref project) = toml.project else {
@@ -329,36 +383,71 @@ fn get_project_toml(
             project_name,
         )
     }
-    if !is_root_project {
-        return toml;
-    }
-    match &project.entry {
-        None => config_error!(
-            toml_path,
-            r#"{:?} 主项目的 "puzzle.toml" 配置文件中 [project] 表中缺少必要属性 "entry""#,
-            project_name
-        ),
-        Some(entry) if !modules.contains_key(entry) => {
-            config_error!(
+    if is_root_project {
+        match &project.entry {
+            None => config_error!(
                 toml_path,
-                r#"{:?} 项目的 "puzzle.toml" 配置文件中 [project] 的 "entry" 属性必须在 [modules] 表中选择"#,
+                r#"{:?} 主项目的 "puzzle.toml" 配置文件中 [project] 表中缺少必要属性 "entry""#,
                 project_name
-            )
-        }
-        _ => {}
-    };
+            ),
+            Some(entry) if !modules.contains_key(entry) => {
+                config_error!(
+                    toml_path,
+                    r#"{:?} 项目的 "puzzle.toml" 配置文件中 [project] 的 "entry" 属性必须在 [modules] 表中选择"#,
+                    project_name
+                )
+            }
+            _ => {}
+        };
+    }
+
+    if !bin_file.exists() {
+        create_file(&bin_file).expect("无法创建");
+    }
+    let bytes = postcard::to_allocvec(&toml).unwrap();
+    write(bin_file, &bytes).unwrap();
     toml
 }
 
 fn get_module_toml(
     module_path: &PathBuf,
     toml_path: &PathBuf,
+    build_path: &PathBuf,
+    project_name: &String,
     module_name: &String,
     project_toml: &ProjectToml,
 ) -> ModuleToml {
     if !(toml_path.exists() && toml_path.is_file()) {
         config_error!(module_path, "puzzle.toml 模块配置文件缺失");
     }
+
+    let modified_time = get_modified_time_string(toml_path);
+    let modified_dir = build_path.join("modified/toml");
+    if !modified_dir.exists() {
+        create_dir_all(&modified_dir).unwrap();
+    }
+    let modified_file = modified_dir.join(format!(
+        "module:{}:{}:{}",
+        project_name, module_name, modified_time
+    ));
+    let bin_dir = build_path.join("bin/toml");
+    if !bin_dir.exists() {
+        create_dir_all(&bin_dir).unwrap();
+    }
+    let bin_file = bin_dir.join(format!("module:{}:{}.bin", project_name, module_name));
+    if modified_file.exists() && bin_file.exists() {
+        println!("cache: {}", toml_path.canonicalize_string());
+        let bytes = read(&bin_file).unwrap();
+        return postcard::from_bytes(&bytes).unwrap();
+    }
+
+    remove_files(&modified_dir, |path| {
+        path.file_name_string().starts_with(project_name)
+    })
+    .unwrap();
+
+    create_file(&modified_file).expect("无法创建");
+
     let content = read_to_string(&toml_path).unwrap();
     let mut toml = from_str::<ModuleToml>(&content).unwrap();
     let Some(ref mut module) = toml.module else {
@@ -416,6 +505,12 @@ fn get_module_toml(
         }
         _ => {}
     };
+
+    if !bin_file.exists() {
+        create_file(&bin_file).expect("无法创建");
+    }
+    let bytes = postcard::to_allocvec(&toml).unwrap();
+    write(bin_file, &bytes).unwrap();
 
     toml
 }
@@ -532,4 +627,15 @@ fn print_ignore_rules(projects: &Vec<ContextRef<ProjectContext>>) {
         }
     }
     ansi_println!("{}", message);
+}
+
+fn get_modified_time_string(path: &PathBuf) -> String {
+    metadata(path)
+        .unwrap()
+        .modified()
+        .unwrap()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_millis()
+        .to_string()
 }
