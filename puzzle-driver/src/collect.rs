@@ -10,7 +10,7 @@ use puzzle_core::context::file::{FileAttachment, FileContext};
 use puzzle_core::context::module::{ModuleAttachment, ModuleContext};
 use puzzle_core::context::project::{ProjectAttachment, ProjectContext};
 use puzzle_core::context::root::{weak_root_context, write_root_context, RootAttachment};
-use puzzle_core::extension::{PathBufExt, StringExt};
+use puzzle_core::extension::{OptionExt, PathBufExt, StringExt};
 use puzzle_core::io::{create_file, remove_files};
 use puzzle_core::options::CliOptions;
 use puzzle_core::time::measure_time;
@@ -247,27 +247,27 @@ fn to_ignore_rules(
                 "**" => IgnoreRule {
                     path: source_path.clone(),
                     kind: IgnoreKind::Recursive,
-                    ignore
+                    ignore,
                 },
                 "*" => IgnoreRule {
                     path: source_path.clone(),
                     kind: IgnoreKind::Children,
-                    ignore
+                    ignore,
                 },
                 _ if ignore.ends_with("/**") => IgnoreRule {
                     path: source_path.join(ignore.strip_suffix("/**").unwrap()),
                     kind: IgnoreKind::Recursive,
-                    ignore
+                    ignore,
                 },
                 _ if ignore.ends_with("/*") => IgnoreRule {
                     path: source_path.join(ignore.strip_suffix("/*").unwrap()),
                     kind: IgnoreKind::Children,
-                    ignore
+                    ignore,
                 },
                 _ => IgnoreRule {
                     path: source_path.join(&ignore),
                     kind: IgnoreKind::File,
-                    ignore
+                    ignore,
                 }
             }
         })
@@ -303,29 +303,11 @@ fn get_project_toml(
     if !(toml_path.exists() && toml_path.is_file()) {
         config_error!(project_path, "puzzle.toml 项目配置文件缺失");
     }
-    let modified_time = get_modified_time_string(toml_path);
-    let modified_dir = build_path.join("modified/toml");
-    if !modified_dir.exists() {
-        create_dir_all(&modified_dir).unwrap();
-    }
-    let modified_file = modified_dir.join(format!("project:{}:{}", project_name, modified_time));
-    let bin_dir = build_path.join("bin/toml");
-    if !bin_dir.exists() {
-        create_dir_all(&bin_dir).unwrap();
-    }
-    let bin_file = bin_dir.join(format!("project:{}.bin", project_name));
-    if modified_file.exists() && bin_file.exists() {
-        println!("cache: {}", toml_path.canonicalize_string());
-        let bytes = read(&bin_file).unwrap();
+    let (bin_file, cache_data) =
+        get_bin_file_and_cache_data(toml_path, build_path, format!("project:{}", project_name));
+    if let Some(bytes) = cache_data {
         return postcard::from_bytes(&bytes).unwrap();
     }
-
-    remove_files(&modified_dir, |path| {
-        path.file_name_string().starts_with(&project_name)
-    })
-    .unwrap();
-
-    create_file(&modified_file).expect("无法创建");
 
     let content = read_to_string(&toml_path).unwrap();
     let toml = from_str::<ProjectToml>(&content).unwrap();
@@ -401,9 +383,6 @@ fn get_project_toml(
         };
     }
 
-    if !bin_file.exists() {
-        create_file(&bin_file).expect("无法创建");
-    }
     let bytes = postcard::to_allocvec(&toml).unwrap();
     write(bin_file, &bytes).unwrap();
     toml
@@ -421,32 +400,14 @@ fn get_module_toml(
         config_error!(module_path, "puzzle.toml 模块配置文件缺失");
     }
 
-    let modified_time = get_modified_time_string(toml_path);
-    let modified_dir = build_path.join("modified/toml");
-    if !modified_dir.exists() {
-        create_dir_all(&modified_dir).unwrap();
-    }
-    let modified_file = modified_dir.join(format!(
-        "module:{}:{}:{}",
-        project_name, module_name, modified_time
-    ));
-    let bin_dir = build_path.join("bin/toml");
-    if !bin_dir.exists() {
-        create_dir_all(&bin_dir).unwrap();
-    }
-    let bin_file = bin_dir.join(format!("module:{}:{}.bin", project_name, module_name));
-    if modified_file.exists() && bin_file.exists() {
-        println!("cache: {}", toml_path.canonicalize_string());
-        let bytes = read(&bin_file).unwrap();
+    let (bin_file, cache_data) = get_bin_file_and_cache_data(
+        toml_path,
+        build_path,
+        format!("module:{}:{}", project_name, module_name),
+    );
+    if let Some(bytes) = cache_data {
         return postcard::from_bytes(&bytes).unwrap();
     }
-
-    remove_files(&modified_dir, |path| {
-        path.file_name_string().starts_with(project_name)
-    })
-    .unwrap();
-
-    create_file(&modified_file).expect("无法创建");
 
     let content = read_to_string(&toml_path).unwrap();
     let mut toml = from_str::<ModuleToml>(&content).unwrap();
@@ -506,13 +467,42 @@ fn get_module_toml(
         _ => {}
     };
 
-    if !bin_file.exists() {
-        create_file(&bin_file).expect("无法创建");
-    }
     let bytes = postcard::to_allocvec(&toml).unwrap();
     write(bin_file, &bytes).unwrap();
 
     toml
+}
+
+fn get_bin_file_and_cache_data(
+    toml_path: &PathBuf,
+    build_path: &PathBuf,
+    name: String,
+) -> (PathBuf, Option<Vec<u8>>) {
+    let modified_time = get_modified_time_string(toml_path);
+    let modified_dir = build_path.join("modified/toml");
+    if !modified_dir.exists() {
+        create_dir_all(&modified_dir).unwrap();
+    }
+    let modified_file = modified_dir.join(format!("{}:{}", name, modified_time));
+    let bin_dir = build_path.join("bin/toml");
+    if !bin_dir.exists() {
+        create_dir_all(&bin_dir).unwrap();
+    }
+    let bin_file = bin_dir.join(format!("{}.bin", name));
+    if modified_file.exists() && bin_file.exists() {
+        println!("cache: {}", toml_path.canonicalize_string());
+        (bin_dir, read(&bin_file).unwrap().some())
+    } else {
+        remove_files(&modified_dir, |path| {
+            path.file_name_string().starts_with(&name)
+        })
+        .unwrap();
+        create_file(&modified_file).expect("无法创建");
+        if !bin_file.exists() {
+            create_file(&bin_file).expect("无法创建");
+        }
+        (bin_dir, None)
+    }
 }
 
 fn collect_all_source_paths(path: PathBuf, attachment: &IgnoreRulesAttachment) -> Vec<PathBuf> {
