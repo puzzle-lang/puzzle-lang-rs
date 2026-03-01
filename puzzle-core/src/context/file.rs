@@ -21,7 +21,7 @@ impl_context_attachment!(FileAttachment, FileContext);
 
 impl FileContext {
     pub fn new(parent: ContextWeak<ModuleContext>) -> Self {
-        FileContext {
+        Self {
             parent,
             attachments: HashMap::default(),
         }

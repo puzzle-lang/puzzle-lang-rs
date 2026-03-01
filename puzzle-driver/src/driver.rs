@@ -4,7 +4,6 @@ use puzzle_core::time::{measure_time, measure_timed_value};
 
 pub fn start_building() {
     let duration = measure_time(compile_frontend);
-    compile_frontend();
     if CliOptions::enable_info_progress() {
         println!("执行用时: {:?}", duration);
     }

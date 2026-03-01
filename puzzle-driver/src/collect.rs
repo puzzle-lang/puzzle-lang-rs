@@ -1,4 +1,7 @@
 use crate::config_error;
+use puzzle_core::ansi::ansi::Ansi;
+use puzzle_core::ansi::io::AddAnsi;
+use puzzle_core::ansi_println;
 use puzzle_core::config::ignore::{IgnoreKind, IgnoreRule, IgnoreRulesAttachment};
 use puzzle_core::config::toml::module::ModuleToml;
 use puzzle_core::config::toml::project::{Module, ProjectToml};
@@ -6,10 +9,9 @@ use puzzle_core::context::context::{context_ref, Context, ContextRef, HasChildre
 use puzzle_core::context::file::{FileAttachment, FileContext};
 use puzzle_core::context::module::{ModuleAttachment, ModuleContext};
 use puzzle_core::context::project::{ProjectAttachment, ProjectContext};
-use puzzle_core::context::root::{
-    read_root_context, weak_root_context, write_root_context, RootAttachment,
-};
+use puzzle_core::context::root::{weak_root_context, write_root_context, RootAttachment};
 use puzzle_core::extension::{PathBufExt, StringExt};
+use puzzle_core::options::CliOptions;
 use regex::Regex;
 use std::collections::HashSet;
 use std::fs::{read_dir, read_to_string};
@@ -20,11 +22,14 @@ use toml::from_str;
 pub fn collect_sources(project_path: &PathBuf) {
     let projects = collect_all_projects(project_path.clone(), true);
     let project_contexts = projects.iter().map(get_project_context).collect::<Vec<_>>();
+    let max_path_length = calc_max_path_length(&project_contexts);
+
+    if CliOptions::enable_info_ignore() {
+        print_ignore_rules(&project_contexts)
+    }
+
     let mut guard = write_root_context();
     guard.set_children(project_contexts);
-
-    let max_path_length = calc_max_path_length();
-    println!("{}", max_path_length);
     guard.set(RootAttachment { max_path_length });
 }
 
@@ -156,10 +161,13 @@ fn get_module_context(
 
     let mut file_paths = HashSet::new();
     let mut dir_rules = Vec::new();
+    let mut ignores = Vec::new();
     for rule in ignore_rules {
         if rule.kind == IgnoreKind::File {
+            ignores.push(rule.ignore);
             file_paths.insert(rule.path);
         } else {
+            ignores.push(rule.ignore.clone());
             dir_rules.push(rule);
         }
     }
@@ -167,11 +175,16 @@ fn get_module_context(
     guard.set(IgnoreRulesAttachment {
         file_paths,
         dir_rules,
+        ignores,
     });
 
     let paths = collect_all_source_paths(source_path, guard.get());
+    let files = paths
+        .into_iter()
+        .map(|p| get_file_context(&context, p))
+        .collect();
 
-    // guard.set_children(paths);
+    guard.set_children(files);
 
     drop(guard);
 
@@ -205,41 +218,44 @@ fn to_ignore_rules(
                 "**" => IgnoreRule {
                     path: source_path.clone(),
                     kind: IgnoreKind::Recursive,
+                    ignore
                 },
                 "*" => IgnoreRule {
                     path: source_path.clone(),
                     kind: IgnoreKind::Children,
+                    ignore
                 },
                 _ if ignore.ends_with("/**") => IgnoreRule {
                     path: source_path.join(ignore.strip_suffix("/**").unwrap()),
                     kind: IgnoreKind::Recursive,
+                    ignore
                 },
                 _ if ignore.ends_with("/*") => IgnoreRule {
                     path: source_path.join(ignore.strip_suffix("/*").unwrap()),
                     kind: IgnoreKind::Children,
+                    ignore
                 },
                 _ => IgnoreRule {
                     path: source_path.join(&ignore),
                     kind: IgnoreKind::File,
+                    ignore
                 }
             }
         })
         .collect()
 }
 
-fn get_file_context(parent: &ContextRef<ModuleContext>, path: &PathBuf) -> ContextRef<FileContext> {
+fn get_file_context(parent: &ContextRef<ModuleContext>, path: PathBuf) -> ContextRef<FileContext> {
     let context = context_ref(FileContext::new(Arc::downgrade(parent)));
 
     let mut guard = context.write().unwrap();
     guard.set(FileAttachment {
         builtin: false,
         name: path.file_name_string(),
-        path: path.clone(),
+        path,
         line_starts: None,
     });
-
     drop(guard);
-
     context
 }
 
@@ -439,10 +455,10 @@ fn collect_all_source_paths(path: PathBuf, attachment: &IgnoreRulesAttachment) -
     }
 }
 
-fn calc_max_path_length() -> usize {
+fn calc_max_path_length(projects: &Vec<ContextRef<ProjectContext>>) -> usize {
     let mut max_path_length = 0;
-    for project in read_root_context().read_children() {
-        for module in project.read_children() {
+    for project in projects {
+        for module in project.read().unwrap().read_children() {
             for file in module.read_children() {
                 let attachment = file.get::<FileAttachment>();
                 let length = attachment.path.canonicalize_string().len();
@@ -453,4 +469,67 @@ fn calc_max_path_length() -> usize {
         }
     }
     max_path_length
+}
+
+fn print_ignore_rules(projects: &Vec<ContextRef<ProjectContext>>) {
+    let mut message = String::new();
+    message.push_ansi(Ansi::BrightWhite);
+    message += "忽略规则:\n";
+    let projects_last_index = projects.len() - 1;
+    for (project_index, project) in projects.iter().enumerate() {
+        let project = project.read().unwrap();
+        message.push_ansi(Ansi::BrightCyan);
+        message += if project_index == projects_last_index {
+            "└─"
+        } else {
+            "├─"
+        };
+        message.push_ansi(Ansi::BrightWhite);
+        let pa = project.get::<ProjectAttachment>();
+        message += &format!(" {}\n", pa.name);
+        let modules = project.read_children();
+        let modules_last_index = modules.len() - 1;
+        for (module_index, module) in modules.iter().enumerate() {
+            message.push_ansi(Ansi::BrightCyan);
+            message += if project_index == projects_last_index {
+                " "
+            } else {
+                "│"
+            };
+            message += "   ";
+            message += if module_index == modules_last_index {
+                "└─"
+            } else {
+                "├─"
+            };
+            message.push_ansi(Ansi::BrightWhite);
+            let ma = module.get::<ModuleAttachment>();
+            message += &format!(" {}\n", ma.name);
+            let ignores = &module.get::<IgnoreRulesAttachment>().ignores;
+            let ignores_last_index = ignores.len() - 1;
+            for (index, ignore) in ignores.iter().enumerate() {
+                message.push_ansi(Ansi::Cyan);
+                message += if project_index == projects_last_index {
+                    " "
+                } else {
+                    "│"
+                };
+                message += "   ";
+                message += if module_index == modules_last_index {
+                    " "
+                } else {
+                    "│"
+                };
+                message += "   ";
+                message += if index == ignores_last_index {
+                    "└─"
+                } else {
+                    "├─"
+                };
+                message.push_ansi(Ansi::BrightBlue);
+                message += &format!(" {}\n", ignore);
+            }
+        }
+    }
+    ansi_println!("{}", message);
 }

@@ -23,7 +23,7 @@ impl_context_attachment!(ModuleAttachment, ModuleContext);
 
 impl ModuleContext {
     pub fn new(parent: ContextWeak<ProjectContext>) -> Self {
-        ModuleContext {
+        Self {
             parent,
             attachments: HashMap::default(),
             children: Option::default(),

@@ -59,9 +59,9 @@ pub enum Ansi {
     BgBrightWhite,
 }
 
-impl Display for Ansi {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        let str = match self {
+impl Ansi {
+    pub fn to_str(&self) -> &str {
+        match self {
             /* 重置 */
             Ansi::Reset => "\x1B[0m",
 
@@ -117,7 +117,13 @@ impl Display for Ansi {
             Ansi::BgBrightMagenta => "\x1B[105m",
             Ansi::BgBrightCyan => "\x1B[106m",
             Ansi::BgBrightWhite => "\x1B[107m",
-        };
+        }
+    }
+}
+
+impl Display for Ansi {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        let str = self.to_str();
         f.write_str(str)
     }
 }

@@ -6,6 +6,7 @@ use std::path::PathBuf;
 pub struct IgnoreRulesAttachment {
     pub file_paths: HashSet<PathBuf>,
     pub dir_rules: Vec<IgnoreRule>,
+    pub ignores: Vec<String>
 }
 
 impl_context_attachment!(IgnoreRulesAttachment, ModuleContext);
@@ -14,6 +15,7 @@ impl_context_attachment!(IgnoreRulesAttachment, ModuleContext);
 pub struct IgnoreRule {
     pub path: PathBuf,
     pub kind: IgnoreKind,
+    pub ignore: String
 }
 
 #[derive(Eq, PartialEq, Hash)]

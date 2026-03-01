@@ -24,7 +24,7 @@ impl_context_attachment!(ProjectAttachment, ProjectContext);
 
 impl ProjectContext {
     pub fn new(parent: ContextWeak<RootContext>) -> Self {
-        ProjectContext {
+        Self {
             parent,
             attachments: HashMap::default(),
             children: Option::default(),
